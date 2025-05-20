@@ -1,5 +1,6 @@
 import socket
 import math
+from NodeZero.srv.ChatHandler import ChatHandler
 
 class NodeZeroClient:
     def __init__(self, port=19840):
@@ -7,9 +8,9 @@ class NodeZeroClient:
         public_ip = requests.get('https://api.ipify.org').text
         self.ip = public_ip
         self.port = port
-        self.nodes = ['1.1.1.1', '2.2.2.2']
+        self.nodes = []
         self.executor = None
-        self.running = True  # <-- aggiunto
+        self.running = False
 
     def scan_ips(self):
         import concurrent.futures
@@ -21,7 +22,6 @@ class NodeZeroClient:
         for i in range(1000):
             ip = f"{ip_parts[0]}.{ip_parts[1]}.{(ip_parts[2] + (math.floor(i / 256) % 256 ) % 256)}.{(ip_parts[3] + i) % 256}"
             if ip != self.ip:
-                print(ip)
                 ip_list.append(ip)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
@@ -37,7 +37,7 @@ class NodeZeroClient:
             return
         try:
             with socket.create_connection((ip, self.port), timeout=1) as sock:
-                sock.sendall(b'HELLO')
+                sock.sendall(b'NZ-HANDSHAKE-REQ')
                 response = sock.recv(1024)
                 if response == b'NZ-HANDSHAKE-OK':
                     self.nodes.append(ip)
@@ -49,3 +49,13 @@ class NodeZeroClient:
         if self.executor:
             self.executor.shutdown(wait=False)
             print('[NodeZeroClient] Scansione interrotta.')
+
+    def direct_message(self, ip):
+        with socket.create_connection((ip, self.port), timeout=1) as sock:
+            sock.sendall(b'NZ-DIRECT-MESSAGE')
+            response = sock.recv(1024)
+            if response == b'NZ-DIRECT-MESSAGE-OK':
+                ch = ChatHandler(sock)
+                ch.chat_session()
+            else:
+                print(f'[NodeZeroClient] Errore durante l\'invio del messaggio a {ip}')
